@@ -13,7 +13,7 @@ Debug.Assert(context != null);
 // If it's using normal RayTracing class, then it's because of a bug,
 // and you have to replace content of RayTracing.shade() function
 // with the content of RayTracingWithFog.shade().
-context[PropertyName.CTX_ALGORITHM] = new RayTracingWithFog();
+//context[PropertyName.CTX_ALGORITHM] = new RayTracingWithFog();
 
 // Tooltip.
 context[PropertyName.CTX_TOOLTIP] = "r=<double> g=<double> b=<double> t=<double>\r(R, G, B, transparency of fog, all values in [0, 1])";
@@ -59,7 +59,7 @@ scene.Sources.Add(new PointLightSource(new Vector3d(-5.0, 4.0, -3.0), 1.2));
 // --- NODE DEFINITIONS ----------------------------------------------------
 
 // Fog Sphere.
-Fog fog = new Fog(new double[] { r, g, b }, t);
+UniformFog fog = new UniformFog(new double[] { r, g, b }, t);
 Sphere s;
 s = new Sphere();
 s.SetAttribute(PropertyName.MATERIAL, fog);

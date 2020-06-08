@@ -54,51 +54,63 @@ namespace DamianWaloszek
       // There was at least one intersection
       i.Complete();
 
-      // calculating fog contribution if we are in fog
+      // Calculating fog contribution if we are in fog
       double[] fogColorContribution = null;
-      if (i.Material is Fog && intersections.Find(i).Next != null && intersections.Find(i).Next.Value != null)
+      if (i.Material is UniformFog)
       {
-        Intersection j = intersections.Find(i).Next.Value;
-        j.Complete();
-
-        fogColorContribution = new double[4]; //RGB + Alpha
-        fogColorContribution[0] = i.Material.Color[0];
-        fogColorContribution[1] = i.Material.Color[1];
-        fogColorContribution[2] = i.Material.Color[2];
-
-        Vector3d start = i.CoordWorld;
-        Vector3d end = j.CoordWorld;
-        double distance = Vector3d.Distance(start, end);
-        double alphaOfFog = 1 - Math.Pow(i.Material.Kt, distance);
-        fogColorContribution[3] = alphaOfFog;
-
-        if (j.Material is Fog)
+        var next = intersections.Find(i).Next;
+        if (next != null)
         {
-          // i is the start of fog, j the end, so take another intersection
-          if (intersections.Find(j).Next != null && intersections.Find(j).Next.Value != null)
+          Intersection j = next.Value;
+          j.Complete();
+
+          fogColorContribution = new double[4]; // RGB + Alpha
+          fogColorContribution[0] = i.Material.Color[0];
+          fogColorContribution[1] = i.Material.Color[1];
+          fogColorContribution[2] = i.Material.Color[2];
+
+          Vector3d start = i.CoordWorld;
+          Vector3d end = j.CoordWorld;
+          double distance = Vector3d.Distance(start, end);
+          // If the distance from the start of the fog to the end of fog/next object
+          // is 1 and Fog's transparency value is 0.6, then the alpha channel of fog is 1 - 0.6.
+          // If the distance is e.g. 2, then the alpha is 1 - (0.6)^2 etc. - the fog is stronger
+          double alphaOfFog = 1 - Math.Pow(i.Material.Kt, distance);
+          fogColorContribution[3] = alphaOfFog;
+
+          if (j.Material is UniformFog)
           {
-            i = intersections.Find(j).Next.Value;
-            i.Complete();
+            // i is the start of fog, j the end, so take another intersection
+            var next2 = intersections.Find(j).Next;
+            if (next2 != null)
+            {
+              // Set i to intersection after the fog end.
+              i = next2.Value;
+              i.Complete();
+            }
+            else
+            {
+              // No intersection except the fog -> background color + fog
+              rayRegisterer?.RegisterRay(AbstractRayRegisterer.RayType.rayVisualizerNormal, depth, p0, direction * 100000);
+
+              // Some hash to return; hash is not modified by going through the fog
+              long res = scene.Background.GetColor(p1, color);
+
+              // Apply the fog; if alpha of fog is 0, then pure background color, if 1 then pure fog color
+              for (int k = 0; k < 3; ++k)
+              {
+                color[k] = color[k] * (1 - fogColorContribution[3]) + fogColorContribution[k] * fogColorContribution[3];
+              }
+
+              return res;
+            }
+
           }
           else
           {
-            // No intersection except the fog -> background color + fog
-            rayRegisterer?.RegisterRay(AbstractRayRegisterer.RayType.rayVisualizerNormal, depth, p0, direction * 100000);
-
-            long res = scene.Background.GetColor(p1, color);
-
-            for (int k = 0; k < 3; ++k)
-            {
-              color[k] = color[k] * (1 - fogColorContribution[3]) + fogColorContribution[k] * fogColorContribution[3];
-            }
-
-            return res;
+            // Intersection j is some (solid) object, so assign it to i
+            i = j;
           }
-
-        }
-        else
-        {
-          i = j;
         }
       }
 
@@ -215,17 +227,17 @@ namespace DamianWaloszek
         }
       }
 
-      // if we were in fog, mix with appropriate color
-      /*if (fogColorContribution != null)
+      // If we were in fog, apply the fog; if alpha of fog is 0, then pure background color, if 1 then pure fog color
+      if (fogColorContribution != null)
       {
         for (int k = 0; k < 3; ++k)
         {
           color[k] = color[k] * (1 - fogColorContribution[3]) + fogColorContribution[k] * fogColorContribution[3];
         }
-      }*/
+      }
 
-      // Check the recursion depth.
-      if (depth++ >= MaxLevel || (!DoReflections && !DoRefractions) || i.Material is Fog)
+      // Check the recursion depth. Don't do reflections nor refractions if current intersection is fog.
+      if (depth++ >= MaxLevel || (!DoReflections && !DoRefractions) || i.Material is UniformFog)
         // No further recursion.
         return hash;
 
@@ -280,7 +292,7 @@ namespace DamianWaloszek
   /// Simple Phong-like reflectance model: material description.
   /// </summary>
   [Serializable]
-  public class Fog : IMaterial
+  public class UniformFog : IMaterial
   {
     /// <summary>
     /// Base surface color.
@@ -301,25 +313,25 @@ namespace DamianWaloszek
       set { }
     }
 
-    public Fog(double[] color, double transparency)
+    public UniformFog(double[] color, double transparency)
     {
       Color = color;
       Kt = transparency;
     }
 
-    public Fog (Fog f)
+    public UniformFog (UniformFog f)
     {
       Color = (double[])f.Color.Clone();
       Kt = f.Kt;
     }
 
-    public Fog() : this(new double[] { 0.5, 0.5, 0.5 }, 0.6)
+    public UniformFog() : this(new double[] { 0.5, 0.5, 0.5 }, 0.6)
     { }
     
 
     public object Clone ()
     {
-      return new Fog(this);
+      return new UniformFog(this);
     }
   }
 
