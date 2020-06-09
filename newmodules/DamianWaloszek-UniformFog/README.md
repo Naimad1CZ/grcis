@@ -17,7 +17,7 @@ Currently, the extension doesn't work for objects inside the fog (because of bad
 Also, setting `context[PropertyName.CTX_ALGORITHM] = new RayTracingWithFog();` is currently broken, so we have to wait for fix (workaround: copy content of shade() function to the RayTracing class or set this in preprocessing).
 
 <p align="center">
- <img src="/Screenshots/1.png">
+ <img src="Screenshots/1.png">
 </p>
 
 ## Usage
