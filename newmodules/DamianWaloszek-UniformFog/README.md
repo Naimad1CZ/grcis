@@ -22,7 +22,9 @@ Also, setting `context[PropertyName.CTX_ALGORITHM] = new RayTracingWithFog();` i
 
 ## Usage
 
-Example usage is in file TwoSpheresAndFog.cs (don't forget to move it to /data/rtscenes), you set ray tracing algorithm: <br>
+Example usage is in file TwoSpheresAndFog.cs (don't forget to move it to /data/rtscenes). <br>
+
+You set ray tracing algorithm: <br>
 `context[PropertyName.CTX_ALGORITHM] = new RayTracingWithFog();` <br>
 so the ray traces knows how to handle clouds. (currently broken as mentioned above) <br>
 
