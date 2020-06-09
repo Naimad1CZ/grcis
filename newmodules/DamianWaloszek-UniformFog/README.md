@@ -11,10 +11,10 @@
 
 The extension creates a material (with the modified RayTracing technique) with fog/cloud-like properties - if the fog is between camera and object, the object will be colored with fog color with the intensity dependent on how much (absolute) distance in the ray's path was in fog.
 
-Rays passes through the fog, so no reflections nor refractions are computed for UniformFog, however is can be seen on reflections/refractions of other objects. UniformFog also casts shadow (like the real clouds do), but I guess that you can disable shadow casting for particular objects with UniformFog material.
+Rays passes through the fog, so no reflections nor refractions are computed for UniformFog, however is can be seen on reflections/refractions of other objects. UniformFog also casts shadow (like the real clouds do), but I you can disable shadow casting for particular objects with UniformFog material.
 
 Currently, the extension doesn't work for objects inside the fog (because of bad implementation of program's build-in Intersect funtion), but should be fixed in future. <br>
-Also, setting `context[PropertyName.CTX_ALGORITHM] = new RayTracingWithFog();` is currently broken, so we have to wait for fix (workaround: copy content of shade() function to the RayTracing class or set this in preprocessing).
+Also, setting `context[PropertyName.CTX_ALGORITHM] = new RayTracingWithFog();` is currently broken, so we have to wait for fix (workaround: copy content of shade() function to the RayTracing class).
 
 <p align="center">
  <img src="Screenshots/1.png">
