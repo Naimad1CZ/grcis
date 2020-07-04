@@ -99,8 +99,8 @@ namespace _062animation
     {
       if (string.IsNullOrEmpty(sceneFileName))
       {
-        imf = null;
-        rend = null;
+        imf     = null;
+        rend    = null;
         tooltip = "";
         return null;
       }
@@ -150,7 +150,7 @@ namespace _062animation
     }
 
     /// <summary>
-    /// Redraws the whole image.
+    /// Redraws single image.
     /// </summary>
     private void RenderImage ()
     {
@@ -174,14 +174,9 @@ namespace _062animation
 
       // Params: <debug> disables multi-threading.
       Dictionary<string, string> p = Util.ParseKeyValueList(textParam.Text);
-      if (p.TryGetValue("debug", out string val) &&
-          (string.IsNullOrEmpty(val) ||
-           Util.positive(val)))
-      {
-        // Debugging.
-        debug         = true;
+      if (Util.TryParse(p, "debug", ref debug) &&
+          debug)
         superSampling = 1;
-      }
 
       // Force preprocessing.
       ctx = null;
@@ -229,24 +224,20 @@ namespace _062animation
 
       // IImageFunction.
       if (imf == null)      // not defined in the script
-        imf = FormSupport.getImageFunction(scene);
-      else
-        if (imf is RayCasting imfrc)
-          imfrc.Scene = scene;
-      imf.Width  = ActualWidth;
-      imf.Height = ActualHeight;
+        imf = FormSupport.getImageFunction();
 
       // IRenderer.
       if (rend == null)        // not defined in the script
         rend = FormSupport.getRenderer(superSampling);
-      rend.ImageFunction = imf;
-      rend.Width         = ActualWidth;
-      rend.Height        = ActualHeight;
-      rend.Adaptive      = 0;
-      rend.ProgressData  = progress;
-      progress.Continue  = true;
+      rend.Adaptive     = 0;
+      rend.ProgressData = progress;
+      progress.Continue = true;
 
       // Set TLS.
+      MT.threads     = 1;
+      MT.threadID    = 0;
+      MT.imageWidth  = ActualWidth;
+      MT.imageHeight = ActualHeight;
       MT.InitThreadData();
       MT.SetRendering(scene, imf, rend);
 
@@ -541,22 +532,19 @@ namespace _062animation
       /// </summary>
       public IRenderer rend;
 
-      // Frame resolution in pixels.
-      public int width;
-      public int height;
+      // Future MT.threadID.
+      public int threadID;
 
       public WorkerThreadInit (
         IRenderer r,
         IRayScene sc,
         IImageFunction imf,
-        int wid,
-        int hei)
+        int thrId)
       {
         scene         = sc;
         imageFunction = imf;
         rend          = r;
-        width         = wid;
-        height        = hei;
+        threadID      = thrId;
       }
     }
 
@@ -585,9 +573,9 @@ namespace _062animation
       }
 
       int t;    // thread ordinal number
-      double minTime    = (double)numFrom.Value;
-      double maxTime    = (double)numTo.Value;
-      double fps        = (double)numFps.Value;
+      double minTime  = (double)numFrom.Value;
+      double maxTime  = (double)numTo.Value;
+      double fps      = (double)numFps.Value;
 
       WorkerThreadInit[] wti = new WorkerThreadInit[threads];
 
@@ -604,6 +592,12 @@ namespace _062animation
         ref maxTime,
         ref fps,
         textParam.Text);
+
+      IRayScene sc0       = null;
+      IImageFunction imf0 = null;
+      IRenderer rend0     = null;
+      MT.imageWidth       = ActualWidth;
+      MT.imageHeight      = ActualHeight;
 
       for (t = 0; t < threads; t++)
       {
@@ -628,8 +622,19 @@ namespace _062animation
         if (debug)
           superSampling = 1;
 
+        // Fallback instances.
+        if (imf == null)
+          imf = FormSupport.getImageFunction();
+        if (rend == null)
+          rend = FormSupport.getRenderer(superSampling);
+
         if (t == 0)
         {
+          // The 1st thread. I'll compare to this.
+          sc0   = sc;
+          imf0  = imf;
+          rend0 = rend;
+
           // Update GUI.
           if (ImageWidth > 0)   // preserving default (form-size) resolution
           {
@@ -640,34 +645,49 @@ namespace _062animation
           UpdateSupersampling(superSampling);
           UpdateAnimationTiming(minTime, maxTime, fps);
         }
-
-        if (sc is ITimeDependent sca)
-          sc = (IRayScene)sca.Clone();
-
-        // IImageFunction.
-        if (imf == null)    // not defined in the script
-          imf = FormSupport.getImageFunction(sc);
         else
-          if (imf is RayCasting imfray)
-            imfray.Scene = sc;
-        imf.Width  = ActualWidth;
-        imf.Height = ActualHeight;
+        {
+          // An additional thread - it must have different instances (if animated).
+          if (sc == sc0 &&
+              sc is ITimeDependent sca)
+            sc = (IRayScene)sca.Clone();
 
-        // IRenderer.
-        if (rend == null)   // not defined in the script
-          rend = FormSupport.getRenderer(superSampling);
-        rend.ImageFunction = imf;
-        rend.Width         = ActualWidth;
-        rend.Height        = ActualHeight;
-        rend.Adaptive      = 0;   // turn off adaptive bitmap synthesis completely (interactive preview not needed)
-        rend.ProgressData  = progress;
+          if (imf == imf0 &&
+              imf is ITimeDependent imfa)
+            imf = (IImageFunction)imfa.Clone();
 
-        wti[t] = new WorkerThreadInit(rend, sc, imf, ActualWidth, ActualHeight);
+          if (rend == rend0 &&
+              rend is ITimeDependent renda)
+            rend = (IRenderer)renda.Clone();
+        }
+
+        // Animation bounds.
+        if (sc is ITimeDependent sca1)
+        {
+          sca1.Start = minTime;
+          sca1.End   = maxTime;
+        }
+        if (imf is ITimeDependent imfa1)
+        {
+          imfa1.Start = minTime;
+          imfa1.End   = maxTime;
+        }
+        if (rend is ITimeDependent renda1)
+        {
+          renda1.Start = minTime;
+          renda1.End   = maxTime;
+        }
+
+        // IRenderer init.
+        rend.Adaptive     = 0;   // turn off adaptive bitmap synthesis completely (interactive preview not needed)
+        rend.ProgressData = progress;
+
+        wti[t] = new WorkerThreadInit(rend, sc, imf, t);
       }
 
       // Update animation timing.
       time = minTime;
-      end =  maxTime;
+      end  = maxTime;
       if (end <= time)
         end = time + 1.0;
 
@@ -680,6 +700,7 @@ namespace _062animation
       sem = new Semaphore(0, 10 * threads);
 
       // Pool of working threads.
+      MT.threads = threads;
       Thread[] pool = new Thread[threads];
       for (t = 0; t < threads; t++)
         pool[t] = new Thread(new ParameterizedThreadStart(RenderWorker));
@@ -695,6 +716,7 @@ namespace _062animation
       Stopwatch sw = new Stopwatch();
       sw.Start();
 
+      Result r;
       while (true)
       {
         sem.WaitOne();                    // wait until a frame is finished
@@ -708,7 +730,6 @@ namespace _062animation
         }
 
         // There could be a frame to process.
-        Result r;
         lock (queue)
         {
           if (queue.Count == 0)
@@ -720,12 +741,14 @@ namespace _062animation
         double seconds = 1.0e-3 * sw.ElapsedMilliseconds;
         double cfps = ++frames / seconds;
         etf.Estimate((float)seconds, frames / total, out float remaining);
+
         // Time spent.
         int cs = (int)seconds;
         int ch = cs / 3600;
         cs %= 3600;
         int cm = cs / 60;
         cs %= 60;
+
         // Time remaining.
         int ls = (int)remaining;
         int lh = ls / 3600;
@@ -769,8 +792,9 @@ namespace _062animation
         return;
 
       // Set TLS.
-      MT.SetRendering(init.scene, init.imageFunction, init.rend);
+      MT.threadID = init.threadID;
       MT.InitThreadData();
+      MT.SetRendering(init.scene, init.imageFunction, init.rend);
 
       // Worker loop.
       while (true)
@@ -800,32 +824,26 @@ namespace _062animation
 
         // Set up the new result record.
         Result r = new Result();
-        r.image = new Bitmap(init.width, init.height, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+        r.image = new Bitmap(MT.imageWidth, MT.imageHeight, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
         r.frameNumber = myFrameNumber;
 
         // Set specific time to my scene.
         if (init.scene is ITimeDependent ascene)
         {
-#if DEBUG && LOGGING
-          Debug.WriteLine($"Scene #{ascene.getSerial()} setTime({myTime})");
+#if LOGGING
+          Util.Log($"Scene(thr={MT.threadID}) #{ascene.getSerial()} setTime({myTime:f3})");
 #endif
           ascene.Time = myTime;
         }
 
-        if (init.rend is ITimeDependent arend)
-        {
-          arend.Start = myTime;
-          arend.End   = myEndTime;
-        }
-
         if (init.imageFunction is ITimeDependent aimf)
-        {
-          aimf.Start = myTime;
-          aimf.End   = myEndTime;
-        }
+          aimf.Time = myTime;
+
+        if (init.rend is ITimeDependent arend)
+          arend.Time = myTime;
 
         // Render the whole frame...
-        init.rend.RenderRectangle(r.image, 0, 0, init.width, init.height);
+        init.rend.RenderRectangle(r.image, 0, 0, MT.imageWidth, MT.imageHeight);
 
         // ...and put the result into the output queue.
         lock (queue)

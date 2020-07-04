@@ -71,13 +71,12 @@ namespace Rendering
     /// <summary>
     /// Clone all the time-dependent components, share the others.
     /// </summary>
-    /// <returns></returns>
     public virtual object Clone ()
     {
-#if DEBUG && LOGGING
-      Util.Log("Clone: AnimatedRayScene");
+      AnimatedRayScene sc = new AnimatedRayScene();
+#if LOGGING
+      Util.Log($"Clone(thr={MT.threadID}): AnimatedRayScene, {getSerial()}->{sc.getSerial()}");
 #endif
-      AnimatedRayScene sc = new AnimatedRayScene ();
 
       sc.Animator = (ITimeDependent)Animator?.Clone();
 
@@ -129,7 +128,7 @@ namespace Rendering
   [Serializable]
   public class AnimatedCSGInnerNode : CSGInnerNode, ITimeDependent
   {
-#if DEBUG
+#if LOGGING
     private static volatile int nextSerial = 0;
     private readonly int serial = nextSerial++;
     public int getSerial () => serial;
@@ -196,8 +195,8 @@ namespace Rendering
     /// </summary>
     public virtual object Clone ()
     {
-#if DEBUG && LOGGING
-      Util.Log( "Clone: AnimatedCSGInnerNode" );
+#if LOGGING
+      Util.Log($"Clone(thr={MT.threadID}): AnimatedCSGInnerNode");
 #endif
       AnimatedCSGInnerNode n = new AnimatedCSGInnerNode(bop, Start, End);
       ShareCloneAttributes(n);
@@ -214,7 +213,7 @@ namespace Rendering
   [Serializable]
   public class AnimatedCamera : StaticCamera, ITimeDependent
   {
-#if DEBUG
+#if LOGGING
     private static volatile int nextSerial = 0;
     private readonly int serial = nextSerial++;
     public int getSerial () => serial;
@@ -240,13 +239,13 @@ namespace Rendering
     {
       Debug.Assert(Start != End);
 
-#if DEBUG && LOGGING
-      Debug.WriteLine($"Camera #{getSerial()} setTime({newTime})");
+#if LOGGING && VERBOSE
+      Util.Log($"Camera(thr={MT.threadID}) #{getSerial()} setTime({newTime:f3})");
 #endif
 
       time = newTime;    // Here Start & End define a periodicity, not bounds!
 
-      // change the camera position:
+      // Change the camera position.
       double angle = MathHelper.TwoPi * (time - Start) / (End - Start);
       Vector3d radial = Vector3d.TransformVector(center0 - lookAt, Matrix4d.CreateRotationY(-angle));
       center = lookAt + radial;
@@ -281,10 +280,15 @@ namespace Rendering
     {
       AnimatedCamera c = new AnimatedCamera(lookAt, center0, MathHelper.RadiansToDegrees((float)hAngle))
       {
-        Start = Start,
-        End   = End,
-        Time  = Time
+        Start  = Start,
+        End    = End,
+        Time   = Time,
+        Width  = Width,
+        Height = Height,
       };
+#if LOGGING
+      Util.Log($"Clone(thr={MT.threadID}): AnimatedCamera, {getSerial()}->{c.getSerial()}");
+#endif
       return c;
     }
 
@@ -387,7 +391,7 @@ namespace Rendering
   [Serializable]
   public class PropertyAnimator : ITimeDependentProperty
   {
-#if DEBUG
+#if LOGGING
     private static volatile int nextSerial = 0;
     private readonly int serial = nextSerial++;
     public int getSerial () => serial;
